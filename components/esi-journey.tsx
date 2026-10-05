@@ -1,8 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { jsPDF } from 'jspdf'
-import { ArrowLeft, ArrowRight, Check, Download, FileText, HelpCircle, LockKeyhole, Sparkles } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Download, Eraser, FileText, HelpCircle, LockKeyhole, Pencil, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 const logoUrl = 'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/logo-W9Dufp1xiUdmPKME6Kmia0Lg4GXltP.png'
@@ -110,7 +110,7 @@ export function EsiJourney() {
 
         <section className="min-w-0">
           <div className="mb-7 flex items-center justify-between gap-4"><div><p className="text-sm font-semibold text-[#5c8750]">Experiencia ESI · paso {step + 1} de {steps.length}</p><div className="mt-2 h-2 w-48 overflow-hidden rounded-full bg-[#dce8c5] sm:w-72"><div className="h-full rounded-full bg-[#65a832] transition-all" style={{ width: `${Math.max(completion, 5)}%` }} /></div></div><span className="rounded-full bg-white px-3 py-1 text-sm font-bold text-[#4d8d24] shadow-sm">{completion}%</span></div>
-          {isFinal ? <FinalScreen answers={answers} exported={exported} onExport={exportPdf} /> : <StepScreen step={step} answers={answers} update={update} />}
+          {isFinal ? <FinalScreen answers={answers} exported={exported} onExport={exportPdf} /> : <><StepScreen step={step} answers={answers} update={update} /><DrawingPad /></>}
           <div className="mt-8 flex justify-between gap-3"><Button variant="outline" onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0}><ArrowLeft data-icon="inline-start" /> Anterior</Button>{!isFinal && <Button onClick={() => setStep(Math.min(steps.length - 1, step + 1))} className="bg-[#438c28] text-white hover:bg-[#34751e]">Guardar y continuar <ArrowRight data-icon="inline-end" /></Button>}</div>
         </section>
       </div>
@@ -133,6 +133,66 @@ function StepScreen({ step, answers, update }: { step: number; answers: Answers;
   ]
   const field = fields[step]
   return <div className="rounded-3xl border border-[#dce8c5] bg-white p-6 shadow-[0_14px_40px_rgba(57,94,34,0.08)] sm:p-10"><div className="mb-8 flex items-start gap-4"><div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-[#eaf5d7] text-[#438c28]"><Sparkles data-icon="inline-start" /></div><div><h1 className="font-serif text-3xl leading-tight text-[#254623] sm:text-4xl">{field.label}</h1><p className="mt-2 text-[#71806d]">Podés volver atrás y cambiar tu respuesta cuando quieras.</p></div></div>{step === 0 && <div className="mb-6 grid gap-4 sm:grid-cols-3"><label className="text-sm font-bold text-[#4d6b45]">Nombre y apellido<input value={answers.name || ''} onChange={(e) => update('name', e.target.value)} className="mt-2 w-full rounded-xl border border-[#cdddbd] bg-[#fbfdf8] px-4 py-3 font-normal outline-none focus:ring-2 focus:ring-[#80b957]" placeholder="Tu nombre" /></label><label className="text-sm font-bold text-[#4d6b45]">Curso<input value={answers.course || ''} onChange={(e) => update('course', e.target.value)} className="mt-2 w-full rounded-xl border border-[#cdddbd] bg-[#fbfdf8] px-4 py-3 font-normal outline-none focus:ring-2 focus:ring-[#80b957]" placeholder="Ej. 4° 2°" /></label><label className="text-sm font-bold text-[#4d6b45]">Institución<input value={answers.institution || ''} onChange={(e) => update('institution', e.target.value)} className="mt-2 w-full rounded-xl border border-[#cdddbd] bg-[#fbfdf8] px-4 py-3 font-normal outline-none focus:ring-2 focus:ring-[#80b957]" placeholder="E.E.S.T. N° 6" /></label></div>}{field.type === 'situation' ? <div className="flex flex-col gap-5"><p className="rounded-2xl bg-[#f1f8e6] p-5 text-lg leading-relaxed text-[#365532]">{answers.situation}</p><label className="text-sm font-bold text-[#4d6b45]" htmlFor="situation-select">Elegí otra situación</label><select id="situation-select" value={answers.situation} onChange={(e) => update('situation', e.target.value)} className="rounded-xl border border-[#cdddbd] bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-[#80b957]"><option>{situations[0]}</option><option>{situations[1]}</option></select></div> : <textarea id={field.key} aria-label={field.label} value={answers[field.key] || ''} onChange={(e) => update(field.key, e.target.value)} placeholder="Escribí tus ideas acá..." className="min-h-44 w-full resize-y rounded-2xl border border-[#cdddbd] bg-[#fbfdf8] p-5 text-base leading-relaxed outline-none transition placeholder:text-[#a0ae98] focus:border-[#6aa53d] focus:ring-4 focus:ring-[#e6f3d7]" />}</div>
+}
+
+function DrawingPad() {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [tool, setTool] = useState<'pencil' | 'eraser'>('pencil')
+  const drawing = useRef(false)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const context = canvas.getContext('2d')
+    if (!context) return
+    context.fillStyle = '#fffef9'
+    context.fillRect(0, 0, canvas.width, canvas.height)
+    context.lineCap = 'round'
+    context.lineJoin = 'round'
+  }, [])
+
+  const pointFromEvent = (event: PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current
+    if (!canvas) return null
+    const bounds = canvas.getBoundingClientRect()
+    return {
+      x: (event.clientX - bounds.left) * (canvas.width / bounds.width),
+      y: (event.clientY - bounds.top) * (canvas.height / bounds.height),
+    }
+  }
+
+  const startDrawing = (event: PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current
+    const context = canvas?.getContext('2d')
+    const point = pointFromEvent(event)
+    if (!context || !point) return
+    drawing.current = true
+    canvas?.setPointerCapture(event.pointerId)
+    context.beginPath()
+    context.moveTo(point.x, point.y)
+  }
+
+  const draw = (event: PointerEvent<HTMLCanvasElement>) => {
+    if (!drawing.current) return
+    const context = canvasRef.current?.getContext('2d')
+    const point = pointFromEvent(event)
+    if (!context || !point) return
+    context.strokeStyle = tool === 'eraser' ? '#fffef9' : '#315b2d'
+    context.lineWidth = tool === 'eraser' ? 24 : 3
+    context.lineTo(point.x, point.y)
+    context.stroke()
+  }
+
+  return <div className="mt-6 rounded-3xl border border-[#dce8c5] bg-[#fbfdf8] p-5">
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div><h2 className="font-serif text-2xl text-[#315b2d]">Tu plantilla</h2><p className="text-sm text-[#71806d]">Dibujá o escribí una idea con el lápiz.</p></div>
+      <div className="flex gap-2" role="toolbar" aria-label="Herramientas de dibujo">
+        <Button type="button" variant={tool === 'pencil' ? 'default' : 'outline'} onClick={() => setTool('pencil')} aria-label="Usar lápiz"><Pencil data-icon="inline-start" /> Lápiz</Button>
+        <Button type="button" variant={tool === 'eraser' ? 'default' : 'outline'} onClick={() => setTool('eraser')} aria-label="Usar goma"><Eraser data-icon="inline-start" /> Goma</Button>
+      </div>
+    </div>
+    <canvas ref={canvasRef} width={1200} height={360} onPointerDown={startDrawing} onPointerMove={draw} onPointerUp={() => { drawing.current = false }} onPointerCancel={() => { drawing.current = false }} className="h-56 w-full touch-none rounded-2xl border border-dashed border-[#cdddbd] bg-[#fffef9]" aria-label="Lienzo de la plantilla" />
+  </div>
 }
 
 function FinalScreen({ answers, exported, onExport }: { answers: Answers; exported: boolean; onExport: () => void }) {
